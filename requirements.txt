@@ -1,3 +1,7 @@
 streamlit
 anthropic
 python-dotenv
+pypdf
+youtube-transcript-api
+SpeechRecognition
+audioop-lts
