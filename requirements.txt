@@ -5,3 +5,4 @@ pypdf
 youtube-transcript-api
 SpeechRecognition
 audioop-lts
+fpdf2
