@@ -1,9 +1,11 @@
-import os
+ import os
+import re
 
 import anthropic
 import speech_recognition as sr
 import streamlit as st
 from dotenv import load_dotenv
+from fpdf import FPDF
 from pypdf import PdfReader
 from youtube_transcript_api import YouTubeTranscriptApi
 
@@ -18,12 +20,14 @@ LEVELS = {
 }
 
 TASKS = {
-    "Study notes": "Write clear, organised study notes with headings and bullet points. "
+    "📝 Study notes": "Write clear, organised study notes with headings and bullet points. "
     "End with a short 'Key terms' list.",
-    "Flashcards": "Create 10 flashcards. Format each one as:\nQ: question\nA: answer",
-    "Quiz": "Create an 8-question quiz with a mix of multiple choice and short answer. "
+    "🃏 Flashcards": "Create 10 flashcards. Format each one as:\nQ: question\nA: answer",
+    "❓ Quiz": "Create an 8-question quiz with a mix of multiple choice and short answer. "
     "Put the answer key at the end.",
 }
+
+SOURCES = ["✍️ Paste text", "📄 Upload PDF", "▶️ YouTube link", "🎙️ Record voice"]
 
 
 def generate(content: str, level: str, task: str) -> str:
@@ -62,27 +66,76 @@ def audio_text(audio) -> str:
     return recognizer.recognize_google(data)
 
 
-st.set_page_config(page_title="Study-notes-ai", page_icon="📚")
-st.title("📚 Study-notes-ai")
-st.caption("Turn lecture notes, PDFs, videos or voice recordings into study material for your level.")
+def parse_cards(text: str):
+    cards, question = [], None
+    for line in text.replace("*", "").split("\n"):
+        line = line.strip()
+        q = re.match(r"^(?:\d+[.)]\s*)?Q\d*:\s*(.*)", line, re.I)
+        a = re.match(r"^A\d*:\s*(.*)", line, re.I)
+        if q:
+            question = q.group(1)
+        elif a and question:
+            cards.append((question, a.group(1)))
+            question = None
+    return cards
 
-level = st.selectbox("Your academic level", list(LEVELS.keys()))
-task = st.radio("What do you want?", list(TASKS.keys()), horizontal=True)
-source = st.radio(
-    "Where is your content from?",
-    ["Paste text", "Upload PDF", "YouTube link", "Record voice"],
-    horizontal=True,
+
+def clean_for_pdf(text: str) -> str:
+    swaps = {
+        "\u2019": "'", "\u2018": "'", "\u201c": '"', "\u201d": '"',
+        "\u2013": "-", "\u2014": "-", "\u2022": "-", "\u2026": "...",
+    }
+    for old, new in swaps.items():
+        text = text.replace(old, new)
+    text = text.replace("**", "").replace("#", "").replace("`", "")
+    return text.encode("latin-1", "replace").decode("latin-1")
+
+
+def make_pdf(title: str, text: str) -> bytes:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.multi_cell(0, 10, clean_for_pdf(title), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+    pdf.set_font("Helvetica", size=11)
+    for line in clean_for_pdf(text).split("\n"):
+        pdf.multi_cell(0, 6, line if line.strip() else " ", new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())
+
+
+st.set_page_config(page_title="Study-notes-ai", page_icon="📚")
+
+st.markdown(
+    """
+<style>
+.hero {background: linear-gradient(135deg, #7C3AED, #06B6D4); padding: 1.4rem 1.2rem;
+       border-radius: 18px; color: white; margin-bottom: 1rem;}
+.hero h1 {color: white; margin: 0; font-size: 1.9rem; padding: 0;}
+.hero p {margin: .4rem 0 0; opacity: .95;}
+div.stButton > button {width: 100%; border-radius: 12px; font-weight: 700; padding: .7rem 0;}
+div[data-testid="stExpander"] {border-radius: 12px; border: 1px solid #DDD6FE;}
+</style>
+<div class="hero">
+  <h1>📚 Study-notes-ai</h1>
+  <p>Turn lectures, PDFs, videos and voice notes into study material made for your level.</p>
+</div>
+""",
+    unsafe_allow_html=True,
 )
+
+level = st.selectbox("🎓 Your level", list(LEVELS.keys()))
+task = st.radio("🎯 What do you want?", list(TASKS.keys()), horizontal=True)
+source = st.radio("📥 Where is your content from?", SOURCES, horizontal=True)
 
 content = ""
 try:
-    if source == "Paste text":
+    if "Paste" in source:
         content = st.text_area("Paste your content here", height=250)
-    elif source == "Upload PDF":
+    elif "PDF" in source:
         pdf = st.file_uploader("Upload a PDF", type="pdf")
         if pdf:
             content = pdf_text(pdf)
-    elif source == "YouTube link":
+    elif "YouTube" in source:
         link = st.text_input("YouTube link")
         if link:
             content = youtube_text(link)
@@ -94,7 +147,7 @@ try:
 except Exception as e:
     st.error(f"Could not read that source: {e}")
 
-if st.button("Generate"):
+if st.button("✨ Generate"):
     if not os.getenv("ANTHROPIC_API_KEY"):
         st.error("No API key found. Add ANTHROPIC_API_KEY to your Secrets.")
     elif not content.strip():
@@ -102,8 +155,39 @@ if st.button("Generate"):
     else:
         with st.spinner("Working on it..."):
             try:
-                result = generate(content[:30000], level, task)
-                st.markdown(result)
-                st.download_button("Download", result, file_name="study-material.txt")
+                st.session_state["result"] = generate(content[:30000], level, task)
+                st.session_state["task"] = task
+                st.balloons()
             except Exception as e:
                 st.error(f"Something went wrong: {e}")
+
+result = st.session_state.get("result")
+if result:
+    saved_task = st.session_state.get("task", "")
+    st.divider()
+    st.subheader(saved_task)
+
+    if "Flashcards" in saved_task:
+        cards = parse_cards(result)
+        if cards:
+            st.caption("Tap a card to reveal the answer 👇")
+            for i, (q, a) in enumerate(cards, 1):
+                with st.expander(f"🃏 {i}. {q}"):
+                    st.success(a)
+        else:
+            st.markdown(result)
+    else:
+        st.markdown(result)
+
+    st.markdown("### ⬇️ Download")
+    col1, col2 = st.columns(2)
+    try:
+        col1.download_button(
+            "📄 PDF",
+            make_pdf("Study-notes-ai", result),
+            file_name="study-material.pdf",
+            mime="application/pdf",
+        )
+    except Exception:
+        col1.caption("PDF not available for this one.")
+    col2.download_button("📝 Text file", result, file_name="study-material.txt")
