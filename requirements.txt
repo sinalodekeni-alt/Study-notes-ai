@@ -4,4 +4,4 @@ openai-whisper
 yt-dlp
 pypdf
 soundfile
-
+anthropic
