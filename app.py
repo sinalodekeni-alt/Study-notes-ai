@@ -19,9 +19,10 @@ load_dotenv()
 
 MODEL = "claude-sonnet-5-5"
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip().strip('"').rstrip("/")
+SUPABASE_KEY = (os.getenv("SUPABASE_KEY") or "").strip().strip('"')
 DB_ENABLED = bool(create_client and SUPABASE_URL and SUPABASE_KEY)
+DB_HINT = " Check SUPABASE_URL and SUPABASE_KEY in your app Secrets, and that Confirm email is off in Supabase."
 
 LEVELS = {
     "High school": "a high school student. Use simple words and short sentences.",
@@ -73,6 +74,12 @@ def run_task(task: str, content: str, level: str, max_tokens: int = 2000) -> str
 
 def pdf_text(file) -> str:
     return "\n".join(p.extract_text() or "" for p in PdfReader(file).pages)
+
+
+def read_upload(file) -> str:
+    if file.name.lower().endswith(".pdf"):
+        return pdf_text(file)
+    return file.getvalue().decode("utf-8", errors="ignore")
 
 
 def youtube_text(url: str) -> str:
@@ -186,7 +193,7 @@ def account_panel():
                 if st.button("Log in", key="do_login"):
                     try:
                         res = get_client().auth.sign_in_with_password(
-                            {"email": email, "password": password}
+                            {"email": email.strip(), "password": password}
                         )
                         st.session_state["user"] = res.user.email
                         ok = True
@@ -202,14 +209,17 @@ def account_panel():
                 ok = False
                 if st.button("Create account", key="do_signup"):
                     try:
-                        res = get_client().auth.sign_up({"email": email2, "password": password2})
+                        res = get_client().auth.sign_up(
+                            {"email": email2.strip(), "password": password2}
+                        )
                         if res.session:
-                            st.session_state["user"] = email2
+                            st.session_state["user"] = email2.strip()
                             ok = True
                         else:
                             st.info("Check your email to confirm your account, then log in.")
                     except Exception as e:
                         st.error(f"Could not sign up: {e}")
+                        st.caption(DB_HINT)
                 if ok:
                     st.rerun()
             return
@@ -379,9 +389,13 @@ try:
     if source == "paste":
         content = st.text_area("Paste your content here", height=220)
     elif source == "pdf":
-        pdf = st.file_uploader("Upload a PDF", type="pdf")
-        if pdf:
-            content = pdf_text(pdf)
+        upload = st.file_uploader("Upload a PDF or text file")
+        if upload:
+            content = read_upload(upload)
+            if content.strip():
+                st.success(f"✅ Loaded {upload.name} ({len(content):,} characters)")
+            else:
+                st.warning("No readable text found. It may be a scan. Try Paste text instead.")
     elif source == "youtube":
         link = st.text_input("YouTube link")
         if link:
@@ -519,12 +533,4 @@ if st.session_state.get("notes"):
                 f"in the material, say so.\n\nMATERIAL:\n{saved_content}"
             )
             try:
-                answer = ask(system, st.session_state["chat"])
-            except Exception as e:
-                answer = f"Something went wrong: {e}"
-            st.session_state["chat"].append({"role": "assistant", "content": answer})
-            with st.chat_message("assistant"):
-                st.markdown(answer)
-
-    with tab_text:
-        st.text_area("Your source text", saved_content, height=300, disabled=True)
+       
