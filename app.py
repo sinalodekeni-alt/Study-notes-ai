@@ -517,29 +517,28 @@ if st.session_state.get("notes"):
                 if score == len(quiz):
                     st.balloons()
 
-    with tab_chat:
-        st.caption("Ask anything about your material 👇")
-        for message in st.session_state["chat"]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-        question = st.chat_input("Ask a question about your notes...")
-        if question:
-            st.session_state["chat"].append({"role": "user", "content": question})
-            with st.chat_message("user"):
-                st.markdown(question)
-            system = (
-                f"You are a friendly tutor for {LEVELS[saved_level]} "
-                "Answer using ONLY the study material below. If the answer is not "
-                f"in the material, say so.\n\nMATERIAL:\n{saved_content}"
-            )
-                        try:
-                answer = ask(system, st.session_state["chat"])
-            except Exception as e:
-                answer = f"Something went wrong: {e}"
-            st.session_state["chat"].append({"role": "assistant", "content": answer})
-            with st.chat_message("assistant"):
-                st.markdown(answer)
+     with tab_chat:
+    st.caption("Ask anything about your material 👇")
+    for message in st.session_state["chat"]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    question = st.chat_input("Ask a question about your notes...")
+    if question:
+        st.session_state["chat"].append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
+        system = (
+            f"You are a friendly tutor for {LEVELS[saved_level]} "
+            "Answer using ONLY the study material below. If the answer is not "
+            f"in the material, say so.\n\nMATERIAL:\n{saved_content}"
+        )
+        try:
+            answer = ask(system, st.session_state["chat"])
+        except Exception as e:
+            answer = f"Something went wrong: {e}"
+        st.session_state["chat"].append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.markdown(answer)
 
-    with tab_text:
-        st.text_area("Your source text", saved_content, height=300, disabled=True)
-       
+with tab_text:
+    st.text_area("Your source text", saved_content, height=300, disabled=True)
