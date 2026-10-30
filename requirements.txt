@@ -1,9 +1,9 @@
 streamlit
-google-generativeai
-openai-whisper
-yt-dlp
-pypdf
-soundfile
 anthropic
+python-dotenv
+pypdf
+youtube-transcript-api
 SpeechRecognition
-pyaudio
+audioop-lts
+fpdf2
+supabase
