@@ -532,13 +532,15 @@ if st.session_state.get("notes"):
                 "Answer using ONLY the study material below. If the answer is not "
                 f"in the material, say so.\n\nMATERIAL:\n{saved_content}"
             )
-            try:
-       answer = ask(system, st.session_state["chat"])
+       try:
+                answer = ask(system, st.session_state["chat"])
             except Exception as e:
                 answer = f"Something went wrong: {e}"
+            
             st.session_state["chat"].append({"role": "assistant", "content": answer})
+            
             with st.chat_message("assistant"):
                 st.markdown(answer)
 
     with tab_text:
-        st.text_area("Your source text", saved_content, height=300, disabled=True)
+        st.text_area("Your source text", saved_content, height=300, disabled=True)     
